@@ -1,0 +1,355 @@
+<HTML>
+<TITLE>module ocean_model_mod</TITLE>
+<BODY BGCOLOR="#AABBCC" TEXT="#332211" >
+
+<DIV ALIGN="CENTER"> <FONT SIZE=1>
+<A HREF="#INTERFACE">PUBLIC INTERFACE</A> / 
+<A HREF="#DATA_TYPES">DATA</A> / 
+<A HREF="#ROUTINES">ROUTINES</A> / 
+<A HREF="#NAMELIST">NAMELIST</A> / 
+<A HREF="#DIAGNOSTICS">DIAGNOSTICS</A> / 
+<A HREF="#CHANGES">CHANGES</A> / 
+<A HREF="#ERRORS">ERRORS</A> / 
+<A HREF="#REFERENCES">REFERENCES</A> / 
+<A HREF="#NOTES">NOTES</A> 
+</FONT>
+<BR><BR></DIV><HR>
+
+
+<H2>module ocean_model_mod</H2>
+<A NAME="HEADER">
+<PRE>
+<PRE>
+     <B>Contact:</B>   Bruce Wyman, Peter Phillipps, V. Balaji
+     <B>Reviewers:</B>
+
+     <B><A HREF=".doc.log#ocean_model.f90">Tags/Status</A></B>
+</PRE>
+</A><!-- END HEADER -->
+<!--------------------------------------------------------------------->
+<A NAME="OVERVIEW">
+<HR>
+<H4>OVERVIEW</H4>
+<!-- BEGIN OVERVIEW -->
+<PRE>
+
+     Driver for coupling an ocean model.
+
+     This version is set up to return observed SST
+
+</PRE>
+</A><!-- END OVERVIEW -->
+<!--------------------------------------------------------------------->
+<A NAME="DESCRIPTION">
+<!-- BEGIN DESCRIPTION -->
+<PRE>
+
+   A proper description is in the works 
+
+</PRE>
+</A><!-- END DESCRIPTION -->
+<!--------------------------------------------------------------------->
+<A NAME="MODULES_USED">
+<HR>
+<H4>OTHER MODULES USED</H4>
+<!-- BEGIN MODULES_USED -->
+<PRE>
+
+     amip_interp_mod
+    time_manager_mod
+       utilities_mod
+     mpp_domains_mod
+
+</PRE>
+</A><!-- END MODULES_USED -->
+<!--------------------------------------------------------------------->
+<A NAME="INTERFACE">
+<HR>
+<H4>PUBLIC INTERFACE</H4>
+<!-- BEGIN INTERFACE -->
+<PRE>
+
+use ocean_model_mod [, only: ocean_data_type,
+                             ice_ocean_boundary_type,
+                             ocean_grids_type,
+                             ocean_model_init,
+                             ocean_model_end,
+                             update_ocean_model ]
+
+  ocean_data_type     - Derived-type variable that contains boundary
+                        variables from the ocean model state that are
+                        exchanged during the coupling with other
+                        component models.
+
+  ice_ocean_boundary_type - ?? What to say here ??
+
+  ocean_grids_type    - ?? What to say here ??
+
+  ocean_coupled_init  - Initializes the ocean model and returns a variable
+                        of type ocean_data_type. This routine reads
+                        the namelist and restart file.
+
+  update_ocean_coupled - Updates the state of the ocean model for the current
+                         time. Because this is not driving a real ocean model,
+                         most input fluxes to this routine are not used.
+
+  ocean_coupled_end    - Called once at the end of a model run to write
+                         an ocean model restart file.
+
+</PRE>
+</A><!-- END INTERFACE -->
+<!--------------------------------------------------------------------->
+<A NAME="DATA_TYPES">
+<HR>
+<H4>PUBLIC DATA</H4>
+<!-- BEGIN DATA_TYPES -->
+<PRE>
+
+<b>type ice_ocean_boundary_type<b>
+
+<b>type ocean_grids_type</b>
+
+   lon_bnd    = longitude boundaries for temperature grid boxes
+   lat_bnd    = latitude  boundaries for temperature grid boxes
+   lon        = geographic longitude of t-cell centers
+   lat        = geographic latitude of t-cell centers
+   mask       = land-sea mask for temperature grid boxes
+
+    note: longitude/latitude is in radians
+          mask is true for ocean points
+
+
+<b>type ocean_data_type</b>
+
+Domain =  domain information
+          [domain2d]
+
+Global = grid information for the GLOBAL DATA GRID
+            [type(ocean_grids_type)]
+Data   = grid information for the LOCAL DATA GRID
+            [type(ocean_grids_type)]
+
+t_surf     = surface temperature of ocean in degrees K
+                [real, dimension(num_lon,num_lat)]
+frazil     = frazil
+                [real, dimension(num_lon,num_lat)]
+u_surf     = zonal surface current (m/s)
+                [real, dimension(num_lon,num_lat)]
+v_surf     = meridional surface current (m/s)
+                [real, dimension(num_lon,num_lat)]
+sea_lev    = sea level (m)
+                [real, dimension(num_lon,num_lat)]
+
+Time       = the current time   [time_type]
+Time_step  = the ocean model time step   [time_type]
+
+
+<b>NOTES</b>
+
+    1) Global grid information will be the same on all processors.
+    2) The data grid is global, but only the portion local to
+       the current processor is store in Data.
+
+</PRE>
+</A><!-- END DATA_TYPES -->
+<!--------------------------------------------------------------------->
+<A NAME="ROUTINES">
+<HR>
+<H4>PUBLIC ROUTINES</H4>
+<!-- BEGIN ROUTINES -->
+<PRE>
+
+<b>call ocean_model_init</b> ( Ocean, Time_init, Time, Time_step )
+
+Input/Output
+
+   Ocean     This routine initializes this derived-type variable.
+             Arrays contained in this variable are allocated and initialized.
+                [ocean_data_type]
+
+Input
+
+   Time_init     reference time used for output diagnostic quantities
+                 (usually the time at which the entire integration started)
+                    [time_type, see time_manager_mod]
+
+   Time          the current time  [time_type]
+
+   Time_step     time step for ocean model (same as atmospheric time step)
+                    [time_type]
+
+-----------------------------------------------------------------
+
+<b>call update_ocean_model</b> ( Ice_boundary, Ocean )
+
+Input/Output
+
+   Ocean     Derived-type variable containing the publicly-accessible
+             state of the ocean model boundary variables.
+                [ocean_data_type]
+
+Input
+
+   Ice_boundary - ?? What to say here ??
+                  [ice_ocean_boundary_type]
+
+Notes:
+
+   The size of the first and second dimensions for all arrays should
+   be for entire global grid. There is no option to pass a sub-window.
+
+-----------------------------------------------------------------
+
+<b>call ocean_model_end</b> ( Ocean )
+
+Input
+
+   Ocean     Derived-type variable containing the publicly-accessible
+             state of the ocean model boundary variables.
+                [ocean_data_type]
+
+</PRE>
+</A><!-- END ROUTINES -->
+<!--------------------------------------------------------------------->
+<A NAME="NAMELIST">
+<HR>
+<H4>NAMELIST</H4>
+<!-- BEGIN NAMELIST -->
+<PRE>
+
+<b>&ocean_model_nml</b>
+
+   use_climo_sst      Flag that says use monthly climatological SSTs.
+                        [logical, default: use_climo_sst = .false.]
+
+   use_annual_sst     Flag that says use annual climatological SSTs.
+                        [logical, default: use_annual_sst = .false.]
+
+   decomp       The domain decomposition, where decomp(1) = x-axis
+                decomposition, decomp(2) = y-axis decomposition.
+                * If decomp(1)*decomp(2) does not equal the number
+                  of processors the model will fail.
+                * If decomp(1)=decomp(2)=0 then default rules apply.
+                * By default, one-dimensional decomposition (in Y) is used.
+                  When there is fewer than 2 points per processor, then 2-D 
+                  decomposition is used.
+                    [integer, dimension(2), default: decomp = 0,0]
+
+   interp_mehtod   characters that determines interpolation method between
+                   grids. Default value "conservative" means conservative
+                   scheme is adopted. "bilinear" means bilinear interpolation
+                   is used.
+                     [character(len=*), default: interp_method = "conservative"]
+        
+
+</PRE>
+</A><!-- END NAMELIST -->
+<!--------------------------------------------------------------------->
+<A NAME="DIAGNOSTICS">
+<HR>
+<H4>DIAGNOSTIC FIELDS</H4>
+<!-- BEGIN DIAGNOSTICS -->
+<PRE>
+
+     None.
+
+</PRE>
+</A><!-- END DIAGNOSTICS -->
+<!--------------------------------------------------------------------->
+<A NAME="DATA_SETS">
+<HR>
+<H4>DATA SETS</H4>
+<!-- BEGIN DATA_SETS -->
+<PRE>
+
+The restart file is called <b>ocean_model.res</b>.
+The initialization routine, ocean_model_init, reads this file from
+directory INPUT and the termination routine, ocean_model_end, writes
+this file in directory RESTART.
+
+              Restart file format
+
+   record    variable       
+      
+     1         mask         ocean/land mask for the data domain grid
+                            MUST ALWAYS BE PRESENT
+Notes:
+
+     The size of mask must be consistent with the grid size passed
+     through routine ocean_model_init. There are no error checks for this.
+     If the size of mask is smaller than the grid size an I/O error will
+     occur.  If the size of mask is larger than the grid size the program
+     will likely continue producing strange results.
+
+</PRE>
+</A><!-- END DATA_SETS -->
+<!--------------------------------------------------------------------->
+<A NAME="CHANGES">
+<HR>
+<H4>CHANGE HISTORY</H4>
+<!-- BEGIN CHANGES -->
+<PRE>
+<B><A HREF=".doc.log#atmos_model.f90">Revision history</A></B>
+
+</PRE>
+</A><!-- END CHANGES -->
+<!--------------------------------------------------------------------->
+<A NAME="ERRORS">
+<HR>
+<H4>ERROR MESSAGES</H4>
+<!-- BEGIN ERRORS -->
+<PRE>
+
+<b>Fatal Error in ocean_model_init</b>
+
+
+</PRE>
+</A><!-- END ERRORS -->
+<!--------------------------------------------------------------------->
+<A NAME="REFERENCES">
+<HR>
+<H4>REFERENCES</H4>
+<!-- BEGIN REFERENCES -->
+<PRE>
+
+     None.
+
+</PRE>
+</A><!-- END REFERENCES -->
+<!--------------------------------------------------------------------->
+<A NAME="BUGS">
+<HR>
+<H4>KNOWN BUGS</H4>
+<!-- BEGIN BUGS -->
+<PRE>
+
+
+</PRE>
+</A><!-- END BUGS -->
+<!--------------------------------------------------------------------->
+<A NAME="NOTES">
+<HR>
+<H4>NOTES</H4>
+<!-- BEGIN NOTES -->
+<PRE>
+
+     None.
+
+</PRE>
+</A><!-- END NOTES -->
+<!--------------------------------------------------------------------->
+<A NAME="PLANS">
+<HR>
+<H4>FUTURE PLANS</H4>
+<!-- BEGIN PLANS -->
+<PRE>
+
+     None.
+
+</PRE>
+</A><!-- END PLANS -->
+<!--------------------------------------------------------------------->
+
+<HR>
+</BODY>
+</HTML>

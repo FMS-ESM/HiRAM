@@ -1,0 +1,8 @@
+# Makefile template for t3e
+
+FC = f90
+LD = f90
+CPPFLAGS = -F
+FFLAGS = -dp -O2,unroll2
+LDFLAGS = -Wl"-Dpreset=nan;streams=on;permok=yes -Xm $(LIBS)"
+LIST = -O negmsgs -rs

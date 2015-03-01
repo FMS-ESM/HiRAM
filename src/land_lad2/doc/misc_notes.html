@@ -1,0 +1,73 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+  <head>
+    <title>miscellaneous notes</title>
+    <link href="style.css" rel="stylesheet" type="text/css">
+  </head>
+  <body>
+
+<h2>Sharing data between different modules of a component model</h2>
+
+<p>It's a typical situation in a component model that some data initialized in
+the <code>"..._tile"</code> part must be accessible in the body of the model. 
+
+<p>A good example is the number of layers <code>num_l</code> and the array of layer
+thicknesses <code>dz</code> in, let's say, glacier component model. They are
+specified through the namelist <code>glac_data_nml</code> in the
+<code>glac_tile_mod</code>, since they are used in creation of tiles and
+initialization of some other parameters. On the other hand, they must be
+accessible in <code>glac_mod</code> since they are used in <code>glac_step_1</code> and
+<code>glac_step_2</code>. 
+
+<p>An obvious solution would be to move <code>glac_step_1</code> and
+<code>glac_step_2</code> to <code>glac_tile_mod</code>, but the trouble is that these subroutines
+also require access to routines defined in separate modules that depend on
+<code>glac_tile_type</code> (in particular, diagnostics). While this would not be a
+problem in a language with sane separation between interface and
+implementation, in FORTRAN90 with its' rigid module structure it does not seem
+possible without resorting to trickery through FORTRAN77-like standalone
+subroutines. 
+
+<p>There are several possible solutions to this problem:
+<ul>
+   <li>Make such data publicly accessible through the module interface. I don't
+   like this idea because it exposes the data to the entire outside world as well.
+   <li>Provide a public accessor functions to get the data. This is not as bad
+   as exposing the data, but clutters the interface.
+   <li>Somehow duplicate the data in the body of the model. While generally not 
+   a good idea, in the case of the data that never change during a run, like in
+   <code>dz</code> or <code>num_l</code> in the example above, it may be OK. 
+</ul>
+
+<p>For now, I tend to like the third solution for this kind of parameters.
+
+<p>More specifically, since <code>read_glac_namelist</code> calls
+<code>read_glac_data_namelist</code> it is only natural to pass the initialized
+<code>num_l</code> and <code>dz</code> back through argument list. Still, the maximum
+size of the array <code>dz</code> must be consistent in two modules. However, since
+it is a hard-coded constant, it is easier to handle.
+
+
+<h2>Possible future changes</h2>
+
+<p>This is a list of possible changes to the design or implementation that are
+not urgent or essential, but may be done in the future to improve the code style
+and/or functionality.
+
+<ul>
+   <li>Currently some, if not all, component models access a global variable
+     <code>lnd</code>, which holds the essential common land information like map 
+     of tiles, domain, time steps. It may be beneficial, from the point of view 
+     of visibility separation, to pass it (or only relevant information from it) 
+     through the argument list where 
+     necessary.
+   <li>Change the order of operations so that the model works with standard
+     <code>flux_exchange</code>, without having to add variables to the interface.
+     Move calculation of tendencies due to nonlinear processes before calculating
+     the implicit part, so that implicit vertical diffusion calculations diffuse
+     the nonlinear tendencies at the same time step. Atmosphere works this way,
+     calculating nonlinear tendencies before the downward pass, and diffusing 
+     them immediately.
+</ul>
+
+</html>

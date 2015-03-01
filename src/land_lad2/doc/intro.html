@@ -1,0 +1,87 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN"
+   "http://www.w3.org/TR/html4/strict.dtd">
+<html>
+<head>
+   <title>Introduction</title>
+   <link href="style.css" rel="stylesheet" type="text/css">
+</head>
+<body>
+  <h2>Introduction</h2>
+
+  <h3><a name="motivation">Motivation</a></h3>
+  <p>
+  Land occupies only about one third of the Earth surface; however,
+  traditionally land models allocate rectangular arrays to represent land
+  properties and land state variables. This results, naturally, in inefficient
+  memory usage since the portions of those array that happen to be over ocean
+  are not used at all. Typically, this does not pose a big problem in
+  relatively simple models since the number of land state variables and their
+  memory footprint is small. However, with land models becoming more and more
+  sophisticated the burden of dragging along unused chunks of memory can become
+  serious.
+  <p>
+  Moreover, with introduction of non-trivial tiling structure of the land surface,
+  the memory utilization in rectangular arrays grows worse, since the number of
+  tiles can be significantly different in different grid cells, and therefore
+  rectangular arrays waste even larger percentage of memory than they would in
+  the case of uniform number of tiles.  
+  <p>
+  Yet additional challenge for traditional memory allocation schemes is dynamic
+  tiling: some land processes, e.g. the land use, can create or consume tiles
+  as the simulation goes on, and the number of tiles can grow (at least
+  theoretically) indefinitely. In such circumstances, it is hard to know in
+  advance how much tiles to allocate at the beginning of simulation, and
+  consequently it is not easy to come up with a scheme that would allow general
+  enough mechanism of dynamic tiling with traditional array memory allocation 
+  scheme.
+  <p>
+  All of the above motivated us to break away from the concept of rectangular
+  (lat, lon, tile) array as a container for state variables of the land model,
+  and introduce fully dynamic tiling scheme.
+  
+  <h3><a name="general_design">General design</a></h3>
+  <p>
+  The compute domain of each processor is still a rectangular array of grid
+  cells; however each grid cell is represented by a flexible set of tiles. The
+  land model allocates data for tiles as needed, and there are no tiles
+  allocated for the grid cells where there is no land.
+  <p>
+  Each tile occupies a fraction of the land part of the grid cell; the sum of
+  the tile fractions in the land grid cell is 1. The number of tiles, and
+  fraction of land area occupied by each tile in a grid cell can change
+  dynamically, for example as a result of splitting a tile by some process, or
+  merging of tiles that became essentially similar.
+  <p>
+  Tiles are not necessarily created structurally equal. For example, a tile may
+  be a soil tile with vegetation on top, or glacier tile, or lake tile. The
+  state variables and parameters are different for each of those cases, so that
+  the lake tile does not have to waste memory storing information for soil, and
+  vice versa. A set of tiles for any given grid cell can include tiles of
+  different types. 
+  <p>
+  Initial tiling structure is specified using input data sets, such as
+  distribution of land cover and soil cover, and a number of namelist
+  parameters. Similarly, the dynamics of tiling structure is specified using
+  external data sets (such as land use history) and a set of model 
+  parameters.
+  <p>
+  The land model still expects the inputs from the flux coupler in the form of
+  arrays (lon, lat, tile), and returns the data to the coupler in the same
+  shape. The tile dimension of those arrays can change during the run, however: 
+  in this case the land model reallocates the arrays as necessary on request 
+  from flux exchange module.
+  <p>
+  During the time stepping, the land model iterates over all tiles in the
+  compute domain of the processor and calls update procedures for each tile
+  individually, providing necessary input data.
+  <p>
+  Naturally, such design presents problems for the operations that are by
+  nature massive, that is must work on all the tiles (or all the tiles of
+  specific type) at once. An example of such operation would be sending data to
+  diagnostics, as implemented in FMS, or writing restart files. This code uses
+  different tricks to handle those cases, including intermediate buffers for
+  diagnostic data and accessor functions for restart i/o. Details of implementation
+  are described in specific sections of this documentation.
+  <hr>
+</body>
+</html>

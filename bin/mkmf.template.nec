@@ -1,0 +1,18 @@
+
+
+
+# Makefile template for SX cross compiler
+#typical use with netCDF:
+# mkmf -t template.nec -c"-Duse_libMPI -Duse_netCDF" path_names /opt/sx/netcdf/include
+FC = sxmpif90
+LD = sxmpif90
+CC = sxmpic++
+TOTALVIEW =
+NETCDF = /SX/opt/netcdf
+CPPFLAGS = -D__SX
+FFLAGS = -Wf"-A idbl4" -R2 -ts. -Chopt -I$(NETCDF)/include
+CFLAGS = -Xa
+LDFLAGS = $(LIBS)
+LIST = -R2
+# LIBS needs to be customized per site
+LIBS = $(TOTALVIEW) -L$(NETCDF)/lib -lnetcdf

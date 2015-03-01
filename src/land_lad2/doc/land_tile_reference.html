@@ -1,0 +1,360 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN"
+   "http://www.w3.org/TR/html4/strict.dtd">
+<html>
+<head>
+   <title></title>
+   <link href="style.css" rel="stylesheet" type="text/css">
+</head>
+<body id="funcref">
+<h2>land_tile_mod reference</h2>
+
+<h3>Types</h3>
+
+<ul>
+<li><a href="#land_tile_type">land_tile_type</a>
+<li><a href="#land_tile_list_type">land_tile_list_type</a>
+<li><a href="#land_tile_enum_type">land_tile_enum_type</a>
+<li><a href="#diag_buff_type">diag_buff_type</a>
+</ul>
+
+<h3>Contructor and destructor</h3>
+<ul>
+<li><a href="#new_land_tile">new_land_tile</a>
+<li><a href="#delete_land_tile">delete_land_tile</a>
+</ul>
+
+
+<h3>Reference information</h3>
+<ul>
+<li><a href="#tile_is_selected">tile_is_selected</a>
+<li><a href="#get_tile_tags">get_tile_tags</a>
+<li><a href="#print_land_tile_info">print_land_tile_info</a>
+<li><a href="#print_land_tile_statistics">print_land_tile_statistics</a>
+</ul>
+
+
+<h3>Operations with tile lists and enumerators</h3> 
+<ul>
+<li><a href="#land_tile_list_init">land_tile_list_init</a>
+<li><a href="#land_tile_list_end">land_tile_list_end</a>
+<li><a href="#first_elmt">first_elmt</a>
+<li><a href="#tail_elmt">tail_elmt</a>
+<li><a href="#enum_comparison">operator(==), operator(/=)</a>
+<li><a href="#next_elmt">next_elmt</a>
+<li><a href="#prev_elmt">prev_elmt</a>
+<li><a href="#current_tile">current_tile</a>
+<li><a href="#insert">insert</a>
+<li><a href="#erase">erase</a>
+<li><a href="#remove">remove</a>
+<li><a href="#get_elmt_indices">get_elmt_indices</a> 
+<li><a href="#nitems">nitems</a>
+</ul>
+
+
+<h3><a name="new_land_tile">new_land_tile<a></h3>
+<p>Constructor: allocates a land tile and returns pointer to the newly allocated 
+data structure.
+<pre>
+type(land_tile_type), pointer &
+      function new_land_tile([frac,glac,lake,soil,vegn,tag])
+</pre>
+<ul class="arglist">
+<li><code>frac</code> <span class="argtype">[real, in, optional]</span>
+: fraction of the land area occupied by the grid cell. Default value is 0.
+<li><code>glac,lake,soil,vegn</code> 
+<span class="argtype">[integer, in, optional]</span> 
+: tags for the components model data to be created, 
+if any. If any of the tags is present and is greater or equal than zero, then 
+respective component model will be asked to create and initialize data structures 
+for itself. 
+Note that <code>glac</code>, <code>lake</code>, and <code>soil</code> are 
+mutually exclusive.
+<li><code>tag</code>
+<span class="argtype">[integer, in, optional]</span>
+: tag of the entire land tile. Default is 0.
+</ul>
+<p>Note that the component models are asked to allocate and initialize tile data
+that belong to them. The snow pack model and the canopy air component are always
+called, since the respective data must be present in every land tile; the rest
+of the component models (glacier, lake, soil, and vegetation) are only called 
+to initialize their data if respective tag is present in the argument list
+and is greater or equal than zero. Tile diagnostic buffer is also allocated by 
+this subroutine.
+
+
+
+<h3><a name="delete_land_tile">delete_land_tile</a></h3>
+<p>Destructor: given a pointer to the tile, destroys it and frees the memory.
+<pre>
+subroutine delete_land_tile(tile)
+</pre>
+<ul class="arglist">
+<li><code>tile</code>
+<span class="argtype">[type(land_tile_type), pointer]</span> 
+: pointer to the tile to be destroyed.
+</ul>
+<p>Note that the components models are asked to destroy and deallocate the tile 
+data that belong to them before deallocating the land tile.
+
+
+
+<h3><a name="get_tile_tags">get_tile_tags</a></h3>
+<p>Obtain tags of the component model data
+<pre>
+subroutine get_tile_tags(tile[,land,glac,lake,soil,snow,cana,vegn])
+</pre>
+<ul class="arglist">
+<li><code>tile</code>
+<span class="argtype">[type(land_tile_type), in]</span> 
+: tile to get the tags from.
+<li><code>land</code>
+<span class="argtype">[integer, out, optional]</span>
+: retuned tag of the land tile.
+
+<li><code>glac,lake,soil,snow,cana,vegn</code>
+<span class="argtype">[integer, out, optional]</span> 
+: returned tags of the component model data. If the component
+model data is not present in the given land tile, a large negative 
+value is returned.
+</ul>
+
+
+
+<h3><a name="print_land_tile_info">print_land_tile_info</a></h3>
+<p>Prints tile information summary, including tile tag and tags of the component
+model data that are present in the tile.
+<pre>
+subroutine print_land_tile_info(tile)
+</pre>
+<ul class="arglist">
+<li><code>tile</code><span class="argtype">[type(land_tile_type), in]</span>
+: tile to print information about.
+</ul>
+<p>Currently this subroutine is only used in the testing code.
+
+
+
+<h3><a name="print_land_tile_statistics">print_land_tile_statistics</a></h3>
+<p>Prints tile usage statistics: total number of allocated tiles and total number 
+of deleted tiles for the processor.
+<pre>
+subroutine print_land_tile_statistics()
+</pre>
+<p>Currently this subroutine is only used in the testing code.
+
+
+
+<h3><a name="land_tile_list_init">land_tile_list_init</a></h3>
+Constructor: initializes internal structure of the tile list.
+<pre>
+subroutine land_tile_list_init(list)
+</pre>
+<ul class="arglist">
+<li><code>list</code>
+<span class="argtype">[type(land_tile_list_type), inout]</span>
+: list to initialize.
+</ul>
+<p> This must be the first subroutine called for any list of land tiles; 
+it is a fatal error
+to use a list before initializing it. It is not an error to call this function
+more then once for a list: it simply does nothing if the list has been already
+initialized.
+
+
+
+<h3><a name="land_tile_list_end">land_tile_list_end</a></h3>
+Destructor: destroys the contents of the list
+<pre>
+subroutine land_tile_list_end(list)
+</pre>
+<ul class="arglist">
+<li><code>list</code>
+<span class="argtype">[type(land_tile_list_type), inout]</span>
+: list to destroy.
+</ul>
+<p>This subroutine destroys the contents of the given list (deallocates every tile
+present in the list at the moment of the call) and returns the list to the
+non-initialized state.
+
+
+
+<h3><a name="nitems">nitems</a></h3>
+Returns number of elements in the list.
+<pre>
+subroutine nitems(list)
+</pre>
+<ul class="arglist">
+<li><code>list</code>
+<span class="argtype">[type(land_tile_list_type), inout]</span>
+: the list to examine.
+</ul>
+
+
+
+<h3><a name="first_elmt">first_elmt</a></h3>
+Returns enumerator pointing to the first element of a list, or of the 2D array
+of tile lists.
+<pre>
+type(land_tile_enum_type) function first_elmt(list)
+type(land_tile_enum_type) function first_elmt(lists[, is, js])
+</pre>
+<ul class="arglist">
+<li><code>list</code>
+<span class="argtype">[type(land_tile_list_type), in]</span>
+: list to enumerate.
+<li><code>lists(:,:)</code>
+<span class="argtype">[type(land_tile_list_type), in]</span>
+: a 2D array of lists to enumerate.
+<li><code>is,js</code>
+<span class="argtype">[integer, in, optional]</span>
+: lower boundaries of the input array. Those arguments only affect the indices
+returned by the <code>get_tile_indices</code> subroutine.
+</ul>
+
+
+
+<h3><a name="tail_elmt">tail_elmt</a></h3>
+Returns enumerator pointing to the tail element of a list, or of the 2D array
+of tile lists. The tail element is an element behind the last one in the list
+or in the array of lists.
+<pre>
+type(land_tile_enum_type) function tail_elmt(list)
+type(land_tile_enum_type) function tail_elmt(lists[, is, js])
+</pre>
+<ul class="arglist">
+<li><code>list</code>
+<span class="argtype">[type(land_tile_list_type), in]</span>
+: list to enumerate.
+<li><code>lists(:,:)</code> <span class="argtype">[type(land_tile_list_type), in]</span>
+: a 2D array of lists to enumerate.
+<li><code>is,js</code> <span class="argtype">[integer, in, optional]</span>
+: lower boundaries of the input array. Those arguments only affect the indices
+returned by the <code>get_tile_indices</code> subroutine.
+</ul>
+
+
+<h3><a name="enum_comparison">operator(==), operator(/=)</a></h3>
+Comparison of two enumerators. Two enomerators are considered equal if they 
+point to the same list element. Example of usage:
+<pre>
+type(tile_enum_type) :: ce,te
+...
+do while(ce/=te)
+  ...
+enddo
+...
+if (ce==te) then
+   ...
+endif
+</pre>
+
+
+<h3><a name="next_elmt">next_elmt</a></h3>
+Returns the enumerator pointing to the next element in the list or 2D array
+of lists.
+<pre>
+type(land_tile_enum_type) function next_elmt(enum)
+</pre>
+<ul class="arglist">
+<li><code>enum</code> <span class="argtype">[type(land_tile_enum_type), in]</span>
+: enumerator to get the next element of.
+</ul>
+
+
+<h3><a name="prev_elmt">prev_elmt</a></h3>
+Returns the enumerator pointing to the previous element in the list or 2D array
+of lists.
+<pre>
+type(land_tile_enum_type) function prev_elmt(enum)
+</pre>
+<ul class="arglist">
+<li><code>enum</code> <span class="argtype">[type(land_tile_enum_type), in]</span>
+: enumerator to get the previous element of.
+</ul>
+
+
+<h3><a name="current_tile">current_tile</a></h3>
+Given a enumerator, returns a FORTRAN90 pointer to the current tile.
+<pre>
+type(land_tile_type), pointer &
+    function current_tile(enum)
+</pre>
+<ul class="arglist">
+<li><code>enum</code> <span class="argtype">[type(land_tile_enum_type), in]</span>
+: enumerator to get the pointer from.
+</ul>
+
+<h3><a name="insert">insert</a></h3>
+Inserts a tile at the end of the list, or just before given enumerator.
+<pre>
+subroutine insert(tile,list)
+subroutine insert(tile,enum)
+</pre>
+<ul class="arglist">
+<li><code>tile</code> <span class="argtype">[type(land_tile_type), pointer]</span>
+: tile to insert.
+<li><code>list</code> <span class="argtype">[type(land_tile_list_type), inout]</span>
+: list to insert the tile into.
+<li><code>enum</code> <span class="argtype">[type(land_tile_enum_type), in]</span>
+: enumerator to insert the tile before.
+</ul>
+
+
+<h3><a name="erase">erase</a></h3>
+Given an enumerator, erases (removes from list and deletes) current tile from 
+the list, or, given a list erases all the tiles from the list.
+<pre>
+subroutine erase(enum)
+subroutine erase(list)
+</pre>
+<ul class="arglist">
+<li><code>list</code> <span class="argtype">[type(land_tile_list_type), inout]</span>
+: list to erase.
+<li><code>enum</code> <span class="argtype">[type(land_tile_enum_type), inout]</span>
+: enumerator pointing to the tile to erase.
+</ul>
+<p>In the second form of the call, the enumerator points to the next tile in 
+the list after the operation.
+<p>It is an error to attempt to erase the tail element of the list.
+
+<h3><a name="remove">remove</a></h3>
+Given an enumerator, removes the current tile from 
+the list, or, given a list removes all the tiles from the list.
+<pre>
+subroutine remove(enum)
+subroutine remove(list)
+</pre>
+<ul class="arglist">
+<li><code>list</code> <span class="argtype">[type(land_tile_list_type), inout]</span>
+: list to erase.
+<li><code>enum</code> <span class="argtype">[type(land_tile_enum_type), in]</span>
+: enumerator pointing to the tile to erase.
+</ul>
+<p>Note that unlike <code>erase</code>, the tiles are not destroyed. It is the 
+responsibility of the caller to make sure taht this call does not create memory 
+leaks, for example
+by storing pointer to the tile(s) somewhere before removing it from the list.
+<p>In the second form of the call, the enumerator points to the next tile in 
+the list after the successfull removal operation.
+<p>It is an error to attempt to erase the tail element of the list.
+
+
+<h3><a name="get_elmt_indices">get_elmt_indices</a></h3>
+Returns indices of the current tile in the domain.
+<pre>
+subroutine get_elmt_indices(enum,i,j,k)
+</pre>
+<ul class="arglist">
+<li><code>enum</code> <span class="argtype">[type(land_tile_enum_type), in]</span>
+: enumerator to get the indices for.
+<li><code>i,j,k</code> <span class="argtype">[integer, out, optional]</span>
+: indices of the indicated enumerator.
+</ul>
+
+<p>Note that the third index (<code>k</code>) is likely to be incorrect if 
+the list has been manipulated (that is, some tiles were added or removed) 
+during the traversal.
+
+<hr>
+</body>
+</html>

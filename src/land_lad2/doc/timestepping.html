@@ -1,0 +1,89 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN"
+   "http://www.w3.org/TR/html4/strict.dtd">
+<html>
+<head>
+   <title></title>
+   <link href="style.css" rel="stylesheet" type="text/css">
+</head>
+<body>
+<h2>Timestepping</h2>
+<h3><a name="fms_timestepping">FMS time stepping</a></h3>
+<p>A simplified main loop of the entire model looks like this:
+<pre>do nc = 1, num_cpld_calls ! slow time steps
+   call FLUX_OCEAN_TO_ICE
+   call UPDATE_ICE_MODEL_SLOW_UP
+   do na = 1, num_atmos_calls ! fast time steps
+      call SFC_BOUNDARY_LAYER
+      call UPDATE_ATMOS_MODEL_DOWN
+      call FLUX_DOWN_FROM_ATMOS
+      call UPDATE_LAND_MODEL_FAST
+      call UPDATE_ICE_MODEL_FAST
+      call FLUX_UP_TO_ATMOS
+      call UPDATE_ATMOS_MODEL_UP
+   enddo ! fast time steps
+   call UPDATE_LAND_MODEL_SLOW
+   call FLUX_LAND_TO_ICE
+   call UPDATE_ICE_MODEL_SLOW_DN
+   call FLUX_ICE_TO_OCEAN
+   do no = 1,num_ocean_calls
+      call UPDATE_OCEAN_MODEL
+   enddo ! ocean
+enddo ! slow time steps
+</pre>
+<p>
+The sequence of calls within the fast loop is determined by the implicit time stepping for
+vertical diffusion calculation employed for numerical stability (See Isaac Held's note
+elsewhere in the FMS documentation).
+<p>
+Note that <code>SFC_BOUNDARY_LAYER</code>, <code>FLUX_DOWN_FROM_ATMOS</code>, and 
+<code>FLUX_UP_TO_ATMOS</code> work on exchange grid. Moreover, those subroutines share some
+information between them via the module-level variables: <code>SFC_BOUNDARY_LAYER</code> would
+allocate the storage space and save the calculated values there, which would be used (and
+possibly updated) by  <code>FLUX_DOWN_FROM_ATMOS</code> and <code>FLUX_UP_TO_ATMOS</code>.
+The latter eventually deallocates the data in preparation for the next time step.
+<p>
+One important consequence of this structure is that the structure of land tiles (their
+number and their relative area fractions) can't change inside the <code>LAND_FAST</code>.
+However, when the land tiles <emph>do</emph> change (e.g. due to land use processes on the
+slow time step), <code>SFC_BOUNDARY_LAYER</code> expects the land boundary conditions to
+reflect the updated state of the surface.
+
+
+<h3><a href="land_fast">Fast land time steps</a></h3>
+
+<pre>
+do tile=first, last ! loop over tiles in the compute domain
+   call ( glac_step_1 | lake_step_1 | soil_step_1 )
+   call snow_step_1
+   if (vegetation present) call vegn_step_1
+   else                    
+   call cana_step_1
+   form the system of equations for energy and water balance
+   solve the system for fluxes and derivatives w.r.t. surface values
+   call land_surface_energy_balance
+   update surface variables
+   call cana_step_2
+   if (vegetation present) call vegn_step_2
+   call snow_step_2
+   call ( glac_step_2 | lake_step_2 | soil_step_2 )
+   if (vegetation present) call vegn_carbon_int
+   call update_land_bc_fast
+enddo
+call update_river
+</pre>
+<p>
+<code>UPDATE_LAND_BC_FAST</code> serves, in fact, two distinct purposes: it prepares the 
+data for the <code>FLUX_UP_TO_ATMOS</code> (such as updated surface temperature and
+near-surface tracer concentrations), and it prepares the boundary conditions necessary for
+the  <code>SFC_BOUNDARY_LAYER</code> and <code>UPDATE_ATMOS_MODEL_DOWN</code> on the next
+step (such as surface albedo and surface roughness).
+<p>
+However, since <code>UPDATE_LAND_MODEL_SLOW</code> can also update the land properties, it
+means that <code>UPDATE_LAND_BC_FAST</code> must be called at the end of it as well &mdash;
+that is, sometimes it will be called twice per fast time step.
+
+<h3><a href="land_slow">Slow land time steps</a></h3>
+
+<hr>
+</body>
+</html>

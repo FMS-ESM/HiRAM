@@ -1,0 +1,8 @@
+# Makefile template for t90
+
+FC = f90
+LD = f90
+CPPFLAGS = -F
+FFLAGS = -O2
+LDFLAGS = -Wl"-Dpreset=nan $(LIBS)"
+LIST = -O negmsgs -rs

@@ -1,0 +1,160 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN"
+   "http://www.w3.org/TR/html4/strict.dtd">
+<html>
+<head>
+   <title>land_tile_diag_mod reference</title>
+   <link href="style.css" rel="stylesheet" type="text/css">
+</head>
+<body id="funcref">
+
+<h2>land_tile_diag_mod reference</h2>
+
+<h3>Constants</h3>
+<ul>
+<li>OP_AVERAGE, OP_SUM
+</ul>
+
+<h3>Types</h3>
+<ul>
+  <li>diag_buff_type
+</ul>
+
+<h3>Lifetime cycle management</h3>
+<ul>
+  <li><a href="#tile_diag_init">tile_diag_init</a>
+  <li><a href="#tile_diag_end"> tile_diag_end</a>
+</ul>
+
+<h3>Registartion of the diagnostic fields</h3>
+<ul>
+  <li><a href="#register_tiled_diag_field">register_tiled_diag_field</a>
+  <li><a href="#register_tiled_static_field">register_tiled_static_field</a>
+</ul>
+
+<h3>Diagnostic field output</h3>
+<ul>
+  <li><a href="#send_tile_data">send_tile_data</a>
+  <li><a href="#dump_tile_diag_fields">dump_tile_diag_fields</a>
+</ul>
+
+
+<h3><a name="tile_diag_init">tile_diag_init</a></h3>
+<p>Module initializer: must be called before any of the other procedures
+from the module are used.
+<pre>
+subroutine tile_diag_init()
+</pre>
+
+
+<h3><a name="tile_diag_end">tile_diag_end</a></h3>
+<p>Module destructor: must be the last procedure called before the program
+quits.
+<pre>
+subroutine tile_diag_end()
+</pre>
+
+<h3><a name="register_tiled_diag_field">register_tiled_diag_field</a></h3>
+<p>Registers regular (non-static) tiled diagnostic field. Returns a field ID 
+to be used later to send the data to particular diagnostics.
+<pre>
+integer function register_tiled_diag_field (    &
+     module_name, field_name, axes, init_time,  &
+     [long_name, units, missing_value, range, op] )
+</pre>
+<ul class="arglist">
+  <li><code>module_name</code> <span class="argtype">[character(len=*), in]</span> :
+      name of the module.
+  <li><code>field_name</code> <span class="argtype">[character(len=*), in]</span> :
+      name of the diagnostic field.
+  <li><code>axes(:)</code> <span class="argtype">[integer, in]</span> :
+      array of diagnostic axis IDs.
+  <li><code>init_time</code> <span class="argtype">[time_type, in]</span> :
+      initial time for diagnostic output.
+  <li><code>long_name</code> <span class="argtype">[character(len=*), in, optional]</span> :
+      long name of the diagnostic field.
+  <li><code>units</code> <span class="argtype">[character(len=*), in, optional]</span> :
+      units of the diagnostic field.
+  <li><code>missing_value</code> <span class="argtype">[real, in, optional]</span> :
+      missing value for the diagnostic field.
+  <li><code>range(2)</code> <span class="argtype">[real, in, optional]</span> :
+      valid range for the diagnostic field values.
+  <li><code>op</code> <span class="argtype">[integer, in, optional]</span> :
+      code of operation used to aggregate tile values into the grid cell values 
+      for the output. Currently there are
+      two supported operations: OP_AVERAGE &mdash; area-weighted averaging over
+      tiles, and OP_SUM &mdash; straightforward sum of the tile values.
+</ul>
+
+
+<h3><a name="register_tiled_static_field">register_tiled_static_field</a></h3>
+<p>Registers static tiled diagnostic field. Returns a field ID to be used later to
+send the data to particular diagnostics.
+<pre>
+integer function register_tiled_static_field ( &
+     module_name, field_name, axes,            &
+     long_name, units, missing_value, range, require, op)
+</pre>
+<ul class="arglist">
+  <li><code>module_name</code> <span class="argtype">[character(len=*), in]</span> :
+      name of the module.
+  <li><code>field_name</code> <span class="argtype">[character(len=*), in]</span> :
+      name of the diagnostic field.
+  <li><code>axes(:)</code> <span class="argtype">[integer, in]</span> :
+      array of diagnostic axis IDs.
+  <li><code>long_name</code> <span class="argtype">[character(len=*), in, optional]</span> :
+      long name of the diagnostic field.
+  <li><code>units</code> <span class="argtype">[character(len=*), in, optional]</span> :
+      units of the diagnostic field.
+  <li><code>missing_value</code> <span class="argtype">[real, in, optional]</span> :
+      missing value for the diagnostic field.
+  <li><code>range(2)</code> <span class="argtype">[real, in, optional]</span> :
+      valid range for the diagnostic field values.
+  <li><code>require</code> <span class="argtype">[logical, in, optional]</span> :
+      ?
+  <li><code>op</code> <span class="argtype">[integer, in, optional]</span> :
+      code of operation used to aggregate tile values into the grid cell values 
+      for the output. Currently there are
+      two supported operations: OP_AVERAGE &mdash; area-weighted averaging over
+      tiles, and OP_SUM &mdash; straightforward sum of the tile values.
+</ul>
+
+
+<h3><a name="send_tile_data">send_tile_data</a></h3>
+<p>Send scalar or 1-D array data to the tiled diagnostics.
+<pre>
+subroutine send_tile_data(id, x, buffer)
+</pre>
+<ul class="arglist">
+   <li><code>id</code> <span class="argtype">[integer, in]</span> :
+       diagnostic field  ID, as returned by one of the <code>register_*</code>
+       calls.
+   <li><code>x</code> or <code>x(:)</code> <span class="argtype">[real, in]</span> :
+       tile data to send to diagnostics.
+   <li><code>buffer</code> <span class="argtype">[type(diag_buff_type), inout]</span> :
+       diagnostic buffer for the tile.
+</ul>
+<p>Diagnostic buffer is part of the land tile; it is typically passed down as an 
+argument from top-level subroutines.
+
+
+<h3><a name="dump_tile_diag_fields">dump_tile_diag_fields</a></h3>
+Dumps the accumulated tile data to the FMS diag manager.
+<pre>
+subroutine dump_tile_diag_fields(tiles, time)
+</pre>
+<ul class="arglist">
+   <li><code>tiles(:,:)</code> <span class="argtype">[type(land_tile_list_type), in]</span> :
+   map of the tile lists.
+   <li><code>time</code> <span class="argtype">[type(time_type), in]</span> :
+   current time.
+</ul>
+This function aggregates the values from diagnostic buffers 
+in the specified tile list array and sents the resulting fields to the FMS
+diagnostic manager. Typically this function is called by one of the upper-level
+land model routines once per time step. It is not an error, however, to call it 
+more than once per time step.
+
+
+<hr>
+</body>
+</html>

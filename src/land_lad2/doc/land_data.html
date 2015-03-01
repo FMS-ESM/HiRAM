@@ -1,0 +1,182 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN"
+   "http://www.w3.org/TR/html4/strict.dtd">
+<html>
+<head>
+  <title>Land model state and boundary condition data</title>
+  <link href="style.css" rel="stylesheet" type="text/css">
+</head>
+
+<body>
+  <h2>Land model state and boundary condition data</h2>
+  <p>
+  Module <code>land_data_mod</code> 
+  (<a href="../land_data.F90" type="text/plain">land_data.F90</a>) is a container for several 
+  things:
+  <ol>
+    <li>Definition of the land model global public data.
+    <li>Description of boundary conditions (<code>atmos_land_boundary_type</code> and 
+      <code>land_data_type</code>).
+    <li>Procedures handling allocation and deallocation of these data.
+  </ol>
+
+ <h3><a name="land_state">Land model state</a></h3>
+ <p>
+ The module global data is of particular interest, because it is accessible 
+ to all sub-modules so that they do not need to duplicate the common
+ data internally. Here is the definition of the derived type holding
+ the general land information:
+
+<pre>
+type :: land_state_type
+   integer        :: is,ie,js,je ! compute domain boundaries
+   integer        :: ntprog      ! number of prognostic tracers
+   integer        :: isphum      ! index of specific humidity in tracer table
+   integer        :: ico2        ! index of carbon dioxide in tracer table
+   type(time_type):: dt_fast     ! fast (physical) time step
+   type(time_type):: dt_slow     ! slow time step
+   type(time_type):: time        ! current time
+
+   real, pointer  :: glon (:,:), glat (:,:) ! global grid coordinates, radian
+   real, pointer  :: glonb(:,:), glatb(:,:) ! global grid vertices, radian
+   real, pointer  :: gcellarea(:,:)         ! cell area, m2
+   real, pointer  :: garea(:,:)             ! land area per gridcell, m2
+
+   ! map of tiles
+   type(land_tile_list_type), pointer :: tile_map(:,:)
+   
+   type(domain2d) :: domain ! our domain -- be last since it simplifies
+                            ! debugging in totalview
+end type land_state_type
+</pre>
+
+  <p>
+  There is only one variable of this type, and it is public in the module
+  land_data.
+  <p>
+  The <code>tile_map</code> is essential for the model tiling structure. This field
+  holds a 2-d array of tile containers, one for each grid cell in our computing
+  domain. Naturally, over ocean points the containers are empty. The tiles can
+  be added and removed dynamically.
+
+  <h3><a name="land_bc">Boundary conditions</a></h3>
+  <p>
+  Boundary condition data are basically defined by what the flux coupler expects 
+  from the land model. They are
+  the same for all land models (at least the same as current version of lm3v is
+  using).
+
+  <p><code>atmos_land_boundary_type</code> serves to pass information from
+  flux coupler to the land model:
+  
+<pre>
+type :: atmos_land_boundary_type
+   ! data passed from the coupler to the surface
+   real, dimension(:,:,:), pointer :: & ! (lon, lat, tile)
+        t_flux    => NULL(), &   ! sensible heat flux, W/m2
+        lw_flux   => NULL(), &   ! net longwave radiation flux, W/m2
+        lwdn_flux => NULL(), &   ! downward longwave radiation flux, W/m2
+        sw_flux   => NULL(), &   ! net shortwave radiation flux, W/m2
+        swdn_flux => NULL(), &   ! downward shortwave radiation flux, W/m2
+        lprec     => NULL(), &   ! liquid precipitation rate, kg/(m2 s)
+        fprec     => NULL(), &   ! frozen precipitation rate, kg/(m2 s)
+        tprec     => NULL(), &   !
+   ! components of downward shortwave flux, W/m2  
+        sw_flux_down_vis_dir   => NULL(), & ! visible direct 
+        sw_flux_down_total_dir => NULL(), & ! total direct
+        sw_flux_down_vis_dif   => NULL(), & ! visible diffuse
+        sw_flux_down_total_dif => NULL(), & ! total diffuse
+   ! derivatives of the fluxes
+        dhdt      => NULL(), &   ! sensible w.r.t. surface temperature
+        dhdq      => NULL(), &   ! sensible w.r.t. surface humidity
+        drdt      => NULL(), &   ! longwave w.r.t. surface radiative temperature 
+   !
+        cd_m      => NULL(), &   ! drag coefficient for momentum, dimensionless
+        cd_t      => NULL(), &   ! drag coefficient for tracers, dimensionless
+        ustar     => NULL(), &   ! turbulent wind scale, m/s
+        bstar     => NULL(), &   ! turbulent buoyancy scale, m/s
+        wind      => NULL(), &   ! abs wind speed at the bottom of the atmos, m/s
+        z_bot     => NULL(), &   ! height of the bottom atmospheric layer above the surface, m
+        drag_q    => NULL(), &   ! product of cd_q by wind
+        p_surf    => NULL()      ! surface pressure, Pa
+
+#ifdef LAND_BND_TRACERS
+   real, dimension(:,:,:,:), pointer :: & ! (lon, lat, tile, tracer)
+        tr_flux => NULL(),   &   ! tracer flux, including water vapor flux
+        dfdtr   => NULL()        ! derivative of the flux w.r.t. tracer surface value, 
+                                 ! including evap over surface specific humidity
+#else
+   real, dimension(:,:,:), pointer :: & ! (lon, lat, tile)
+        q_flux => NULL(),    &   ! water vapor flux
+        dedt => NULL(),      &   ! its derivative w.r.t. surface temperature (assuming saturation @ surf.)
+        dedq => NULL()           ! its derivative w.r.t. surface specific humidity
+#endif 
+
+   integer :: xtype             !REGRID, REDIST or DIRECT
+end type atmos_land_boundary_type
+</pre>
+
+  <p><code>land_data_type</code> provides a container for passing data from
+  the land model to the flux coupler. The presence of domain is historical, and
+  probably it is not necessary here. Diagnostic axes are actually used in the
+  <code>flux_exchange</code> for the land-only fluxes and fields; however there 
+  might be a better way to pass them there.
+<pre>
+type :: land_data_type
+   logical :: pe ! data presence indicator for stock calculations
+   real, pointer, dimension(:,:,:)   :: &  ! (lon, lat, tile)
+        tile_size      => NULL(),  & ! fractional coverage of cell by tile, dimensionless
+        t_surf         => NULL(),  & ! ground surface temperature, degK
+        t_ca           => NULL(),  & ! canopy air temperature, degK
+        albedo         => NULL(),  & ! snow-adjusted land albedo
+        albedo_vis_dir => NULL(),  & ! albedo for direct visible radiation
+        albedo_nir_dir => NULL(),  & ! albedo for direct NIR radiation 
+        albedo_vis_dif => NULL(),  & ! albedo for diffuse visible radiation 
+        albedo_nir_dif => NULL(),  & ! albedo for diffuse NIR radiation
+        rough_mom      => NULL(),  & ! surface roughness length for momentum, m
+        rough_heat     => NULL(),  & ! roughness length for tracers and heat, m
+        rough_scale    => NULL()     ! topographic scaler for momentum drag, m
+
+#ifdef LAND_BND_TRACERS
+   real, pointer, dimension(:,:,:,:)   :: &  ! (lon, lat, tile, tracer)
+        tr    => NULL()              ! tracers, including canopy air specific humidity
+#else
+   real, pointer, dimension(:,:,:)   :: &  ! (lon, lat, tile)
+        q_ca => NULL()               ! canopy air specific humidity, kg/kg
+#endif
+
+   real, pointer, dimension(:,:) :: &  ! (lon, lat)
+        discharge      => NULL(),  & ! flux from surface drainage network out of land model
+        discharge_snow => NULL()     ! snow analogue of discharge
+
+   logical, pointer, dimension(:,:,:):: &
+        mask => NULL()               ! true if land
+
+   integer :: axes(2)        ! IDs of diagnostic axes
+   type(domain2d) :: domain  ! our computation domain
+   logical, pointer :: maskmap(:,:) 
+end type land_data_type
+</pre>
+
+  <p>Allocation and deallocation of this data is straightforward; the only
+  interesting detail is that the number of tiles may change dynamically as the
+  model runs, and in this case so should the size of the third dimension of the
+  arrays. That is why the initialization and allocation of these derived types
+  was moved from <code>flux_exchange</code> into the land model, where current
+  number of land tiles is readily available. A logical place to call such
+  reallocation is the <code>update_bnd_*</code> routines, where boundary conditions
+  are actually retrieved from internal land model data.
+
+  <p>Subroutine <code>realloc_cplr2land</code> reallocates the data passed from
+  flux coupler to the land according to the current maximum number of land
+  tiles per grid cell within compute domain. Subroutine <code>realloc_land2cplr</code>
+  does the same for the data passed in the opposite direction. They are used
+  for initial allocation of the data as well.
+  
+  <p>Subroutines <code>dealloc_land2cplr</code> and <code>dealloc_cplr2land</code>
+  deallocate the respective boundary condition data to free the memory; they 
+  are called at the 
+  end of the execution.
+  
+<hr>
+</body>
+</html>

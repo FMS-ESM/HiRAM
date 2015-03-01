@@ -1,0 +1,67 @@
+#!/bin/csh -f
+unalias *
+set echo
+#--------------------------------------------------------------------------------------------------------
+set platform  = intel                                   # A unique identifier for your platform
+set template  = $cwd/../bin/mkmf.template.$platform     # path to template for your platform
+set mkmf      = $cwd/../bin/mkmf                        # path to executable mkmf
+set sourcedir = $cwd/../src                             # path to directory containing model source code
+set mppnccombine = $cwd/../bin/mppnccombine.$platform   # path to executable mppnccombine
+set landnccombine = $cwd/../bin/landnccombine.$platform # path to executable landnccombine
+set PPDIR = $cwd/../postprocessing                      # path to directory containing postprocessing source code for combining netcdf files
+#--------------------------------------------------------------------------------------------------------
+set execdir = $cwd/exec.$platform  # where code is compiled and executable is created
+set executable = $execdir/hiram.x
+
+source /opt/modules/default/init/csh
+module unload PrgEnv-cray PrgEnv-pgi PrgEnv-pathscale PrgEnv-gnu PrgEnv-intel
+module unload netcdf
+module rm PrgEnv-pgi
+module load PrgEnv-intel
+module load intel
+module load hdf5
+module load netcdf
+module list
+
+set pathnames = $cwd/path_names  # path to file containing list of source paths
+#--------------------------------------------------------------------------------------------------------
+# --- compile mppnccombine.c, needed only if $npes > 1 ---
+cd $PPDIR
+cc -O -c -I/opt/cray/netcdf/default/intel/120/include mppnccombine.c
+if ( $status != 0 ) exit
+cc -O -o $mppnccombine /opt/cray/netcdf/default/intel/120/lib/libnetcdf.a mppnccombine.o
+if ( $status != 0 ) exit
+#--------------------------------------------------------------------------------------------------------
+ftn -c -lnetcdf -lnetcdff -I/opt/cray/netcdf/default/netcdf-intel/include nfu.F90
+if ( $status != 0 ) exit
+ftn -c -lnetcdf -lnetcdff -I/opt/cray/netcdf/default/netcdf-intel/include nfu_compress.F90
+if ( $status != 0 ) exit
+ftn -c -lnetcdf -lnetcdff -I/opt/cray/netcdf/default/netcdf-intel/include combine-ncc.F90
+if ( $status != 0 ) exit
+ftn -o $landnccombine -lnetcdf -lnetcdff nfu.o nfu_compress.o combine-ncc.o
+if ( $status != 0 ) exit
+#--------------------------------------------------------------------------------------------------------
+# setup directory structure
+if ( ! -d $execdir ) mkdir -p $execdir
+cd $execdir
+#--------------------------------------------------------------------------------------------------------
+
+# execute mkmf to create makefile
+set cppDefs = "-Duse_libMPI -Duse_netCDF -Duse_LARGEFILE -DSPMD -DUSE_LOG_DIAG_FIELD_INFO"
+$mkmf -a $sourcedir -t $template -p $executable:t -c "$cppDefs" $pathnames $sourcedir/shared/include $sourcedir/shared/mpp/include /usr/local/include $sourcedir/land_lad2/shared
+if ( $status != 0 ) then
+   unset echo
+   echo "ERROR: mkmf failed for hiram" 
+   exit 1
+endif
+
+# --- execute make ---
+make $executable:t
+if ( $status != 0 ) then
+   unset echo
+   echo "ERROR: make failed for hiram" 
+   exit 1
+endif
+
+unset echo
+echo "NOTE: make successful for hiram"

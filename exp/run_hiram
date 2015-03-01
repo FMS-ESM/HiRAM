@@ -1,0 +1,162 @@
+#!/bin/csh -f
+#Minimal runscript
+set echo 
+#--------------------------------------------------------------------------------------------------------
+# define variables
+set platform  = intel                                              # A unique identifier for your platform
+set npes      = 1080                                               # Number of processors
+set num_executions = 1                                             # Number of times the model is run. Each run restarts from previous run.
+set time_stamp = $cwd/../bin/time_stamp.csh                        # Path to timestamp.csh
+set mppnccombine = $cwd/../bin/mppnccombine.$platform              # Path to executable mppnccombine
+#set landnccombine = $cwd/../bin/landnccombine.$platform           # Path to executable landnccombine
+ set landnccombine = /ncrc/home2/fms/local/opt/fre-nctools/20120829/x86_64/bin/combine-ncc # precompiled executable
+set model_executable = $cwd/exec.$platform/hiram.x                 # Path to model executable
+set workdir = /lustre/fs/scratch/$USER/work/hiram_pubrel # Where model is run and model output is produced
+#--------------------------------------------------------------------------------------------------------
+source /opt/modules/default/init/csh
+module unload PrgEnv-cray PrgEnv-pgi PrgEnv-pathscale PrgEnv-gnu PrgEnv-intel
+module unload netcdf
+module rm PrgEnv-pgi
+module load PrgEnv-intel
+module load intel
+module load hdf5
+module load netcdf
+module list
+setenv MAIN_PROGRAM coupler_main.o
+
+set namelist   = $cwd/namelists    # path to namelist file (contains all namelists)
+set diagtable  = $cwd/diag_table   # path to diagnositics table (specifies fields and files for diagnostic output)
+set fieldtable = $cwd/field_table  # path to field table (specifies tracers)
+#--------------------------------------------------------------------------------------------------------
+# The gaea locations of the full input data sets are listed below
+set gridSpec    = /lustre/fs/archive/fms/hiram/cmip5/c180/C180.OM3p25.mosaic.20100302.tar
+set initCond    = /lustre/fs/archive/fms/hiram/cmip5/c180/c180L32.hist_restart_yr1.tar
+set hadisst     = /lustre/fs/archive/fms/hiram/cmip5/sst/hadisst.194912-201004.tar
+set cns_seaesf  = /lustre/fs/archive/fms/hiram/cmip5/seaesf/cns_seaesf.tar
+set seaesf      = /lustre/fs/archive/fms/hiram/cmip5/seaesf/seaesf.AR4-AR5.tar 
+set land_LM3    = /lustre/fs/archive/fms/hiram/cmip5/land/lm3_data_20100312.tar
+set aerosols    = /lustre/fs/archive/fms/hiram/cmip5/forcing/aerosol.climatology.RCP45.1850-2109.tar
+set cmip5       = /lustre/fs/archive/fms/hiram/cmip5/forcing/cmip5_rcp45.tar
+set veg         = /lustre/fs/archive/fms/hiram/cmip5/land/c180_static_veg_data_1981.tar
+set hydrography = /lustre/fs/archive/fms/hiram/cmip5/land/c180_hydrography_20100302.tar
+set ozone       = /lustre/fs/archive/fms/hiram/cmip5/forcing/ozone.1850-2099.RCP45.tar
+set solar       = /lustre/fs/archive/fms/hiram/cmip5/forcing/solar.1610-2300.tar
+set volcanic    = /lustre/fs/archive/fms/hiram/cmip5/forcing/volcanic.1850-2010.tar
+#--------------------------------------------------------------------------------------------------------
+# The GFDL locations of the input data are listed below (See /lustre/fs/archive/fms/hiram/README)
+#set gridSpec    = /archive/fms/hiram/cmip5/c180/C180.OM3p25.mosaic.20100302.tar
+#set initCond    = /archive/fms/hiram/cmip5/c180/c180L32.hist_restart_yr1.tar
+#set hadisst     = /archive/fms/hiram/cmip5/sst/hadisst.194912-201004.tar
+#set cns_seaesf  = /archive/fms/hiram/cmip5/seaesf/cns_seaesf.tar
+#set seaesf      = /archive/fms/hiram/cmip5/seaesf/seaesf.AR4-AR5.tar
+#set land_LM3    = /archive/fms/hiram/cmip5/land/lm3_data_20100312.tar
+#set aerosols    = /archive/fms/hiram/cmip5/forcing/aerosol.climatology.RCP45.1850-2109.tar
+#set cmip5       = /archive/fms/hiram/cmip5/forcing/cmip5_rcp45.tar
+#set veg         = /archive/fms/hiram/cmip5/land/c180_static_veg_data_1981.tar
+#set hydrography = /archive/fms/hiram/cmip5/land/c180_hydrography_20100302.tar
+#set ozone       = /archive/fms/hiram/cmip5/forcing/ozone.1850-2099.RCP45.tar
+#set solar       = /archive/fms/hiram/cmip5/forcing/solar.1610-2300.tar
+#set volcanic    = /archive/fms/hiram/cmip5/forcing/volcanic.1850-2010.tar
+#--------------------------------------------------------------------------------------------------------
+# setup directory structure
+if ( -d $workdir ) then
+  /bin/rm -rf $workdir/*
+else
+  mkdir $workdir
+endif
+cd $workdir
+mkdir INPUT RESTART
+#--------------------------------------------------------------------------------------------------------
+# get input data and executable
+cp $namelist   input.nml
+cp $diagtable  diag_table
+cp $fieldtable field_table
+cp $model_executable .
+touch data_table
+cd $workdir/INPUT
+#--------------------------------------------------------------------------------------------------------
+tar xvf $gridSpec
+tar xvf $initCond
+tar xvf $hadisst
+mv HadISST_sst.nc hurrell_sst.data.nc
+mv HadISST_ice.nc hurrell_ice.data.nc
+tar xvf $seaesf
+tar xvf $cns_seaesf
+tar xvf $land_LM3
+tar xvf $aerosols
+tar xvf $cmip5
+tar xvf $veg
+tar xvf $hydrography
+tar xvf $ozone
+tar xvf $solar
+tar xvf $volcanic
+#--------------------------------------------------------------------------------------------------------
+cd $workdir
+
+set irun = 1
+while ( $irun <= $num_executions )
+#--------------------------------------------------------------------------------------------------------
+# run the model with aprun
+aprun -n $npes ./$model_executable:t
+if ($status != 0) then
+  echo "Error in execution of $cwd/$model_executable:t"
+  exit 1
+endif
+#--------------------------------------------------------------------------------------------------------
+set date_name = `$time_stamp -bf digital`
+foreach outfile (logfile.000000.out time_stamp.out diag_integral.out)
+  mv $outfile $date_name.$outfile
+end
+
+#--------------------------------------------------------------------------------------------------------
+# combine diagnostic files, remove the uncombined files, and add the time stamp to the file names
+if ( $npes > 1 ) then
+  foreach ncfile (`/bin/ls *.nc.0000`)
+    $mppnccombine $ncfile:r
+    if ($status == 0) then
+      rm -f $ncfile:r.[0-9][0-9][0-9][0-9]
+      mv $ncfile:r $date_name.$ncfile:r
+    else
+      echo "Error in execution of $mppnccombine while working on $ncfile:r"
+      exit 1
+    endif
+  end
+endif
+#--------------------------------------------------------------------------------------------------------
+cd $workdir/RESTART
+#--------------------------------------------------------------------------------------------------------
+# combine land restart files, remove the uncombined files, and add the time stamp to the file names
+foreach landname (cana glac lake land snow soil vegn1 vegn2)
+  foreach tilenum (1 2 3 4 5 6)
+    set distfiles=($landname.res.tile$tilenum.nc.[0-9][0-9][0-9][0-9])
+    $landnccombine $distfiles $landname.res.tile$tilenum.nc
+    if ($status == 0) then
+      rm -f $distfiles
+    else
+      echo "Error in execution of $landnccombine while working on $landname.res.tile$tilenum.nc"
+      exit 1
+    endif
+  end
+end
+#--------------------------------------------------------------------------------------------------------
+# combine remaining restart files, remove the uncombined files, and add the time stamp to the file names
+if ( $npes > 1 ) then
+  foreach ncfile (`/bin/ls *.nc.0000`)
+    $mppnccombine $ncfile:r
+    if ($status == 0) then
+      rm -f $ncfile:r.[0-9][0-9][0-9][0-9]
+    else
+      echo "Error in execution of $mppnccombine while working on $ncfile:r"
+      exit 1
+    endif
+  end
+endif
+#--------------------------------------------------------------------------------------------------------
+# Prepare to run the model again
+cd $workdir
+/bin/rm INPUT/*.res   INPUT/*.res.nc   INPUT/*.res.nc.0???   INPUT/*.res.tile?.nc   INPUT/*.res.tile?.nc.0???
+mv    RESTART/*.res RESTART/*.res.nc RESTART/*.res.nc.0??? RESTART/*.res.tile?.nc RESTART/*.res.tile?.nc.0??? INPUT
+#--------------------------------------------------------------------------------------------------------
+@ irun ++
+end
+exit 0

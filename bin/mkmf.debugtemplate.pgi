@@ -1,0 +1,9 @@
+# Makefile template for PGI f90
+CPPFLAGS = -I/opt/cray/netcdf/4.1.1.0/netcdf-pgi/include
+
+FFLAGS = $(CPPFLAGS) -i4 -r8 -byteswapio -Mcray=pointer -O0 -g -traceback -Ktrap=fp -Mflushz -v
+
+FC = ftn
+LD = ftn
+LDFLAGS = -L/opt/cray/netcdf/4.1.1.0/netcdf-pgi/lib -lnetcdf
+CFLAGS = $(CPPFLAGS)

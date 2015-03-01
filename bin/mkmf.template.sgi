@@ -1,0 +1,18 @@
+# Makefile template for SGI MIPSpro f90
+
+FC = f90
+CPPFLAGS = -macro_expand
+FFLAGS = -64 -mips4 -i4 -r8 -d8 -woff134,200,787,1670 -ansi -O2 -OPT:Olimit=0 #optimized
+# FFLAGS = -64 -mips4 -i4 -r8 -d8 -woff134,200,787,1670 -ansi -DEBUG:conform_check=YES:subscript_check=ON:trap_uninitialized=ON:verbose_runtime=ON -g #for debugging
+LIST = -listing
+
+#to debug shmem codes, you need the dbfork library
+#TOTALVIEW = -L/opt/totalview/4.1.0-3/irix6-mips/lib -ldbfork_n64
+#TOTALVIEW = -ldbfork_n64
+#TOTALVIEW = -L/sw/mel/totalview/lib -ldbfork_n64
+
+LD = f90
+# LDFLAGS = -64 -mips4 -v -show $(LIBS) # this is verbose
+LDFLAGS = -64 -mips4 -dont_warn_unused $(LIBS)
+#LIBS must be customized for your site
+LIBS = $(TOTALVIEW) -L/usr/local/lib -lnetcdf -lmpi -lsma -lexc -lscs

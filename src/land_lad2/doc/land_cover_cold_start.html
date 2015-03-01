@@ -1,0 +1,83 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+  <head>
+    <title>land cover cold start notes</title>
+    <link href="style.css" rel="stylesheet" type="text/css">
+  </head>
+  <body>
+  
+<h3>It's necessary to reconcile the cover data on the cold start</h3>
+
+<p>On the cold start of the model (that is, a start  without initial
+conditions) the partitioning of land cover between different tiles must be
+initialized according to the external data and user preferences.  The data may
+come from different sources, and may not be consistent. For example, in the
+model the lake, glacier, and soil tiles are mutually exclusive, and the sum of
+their fractions must be equal to 1. However, a user might want to use, say,
+lake fraction data from his/her own data set, which is not necessarily
+consistent with the standard soil/glacier input.
+
+<p>Another complications arises from the fact that the land/ocean mask used by
+the model is not necessarily consistent with the mask used in the input cover data.
+Sometimes, the model would introduce land points where there's no data, and
+sometimes the model does not have land where there is cover data. Since model
+land mask can and does change as the model evolves, and, moreover, there are
+several land masks used by the different configurations of the model (e.g. fv
+core vs. b-grid), it would be impractical to have to change land model inputs
+for each of the possible masks in use.
+
+<h3>Order of cold-start initialization</h3>
+<ol>
+<li>Each of the component models reads it's own namelist. It has to be done as a first step
+of the entire initialization process, because namelists can affect the
+initialization of the cover maps. For example, user might prefer to use uniform
+vegetation, or single-tile
+vegetation (picking dominant tile in each grid cell), or full multi-tile vegetation.
+
+<li>Each model reads its data and returns an array of the cover fractions,
+taking into account its input data and user preferences provided through
+namelists. Since the main program doesn't know beforehand how many tiles each
+component will request, the component models allocate necessary arrays
+themselves and return pointers to these arrays of fractions (see subroutine
+</code>land_cover_cold_start</code>):
+
+<pre>
+  ! get the maps of fractional covers for each of the sub-models
+  glac=>glac_cover_cold_start(gmask,lnd%glonb,lnd%glatb)
+  lake=>lake_cover_cold_start(gmask,lnd%glonb,lnd%glatb)
+  soil=>soil_cover_cold_start(gmask,lnd%glonb,lnd%glatb)
+  vegn=>vegn_cover_cold_start(gmask,lnd%glonb,lnd%glatb)
+</pre>
+Note that the component models are given global arrays of cell boundaries and
+return global cover fraction fields. Also note that the returned fractions are
+fractions of the land covered by particular tiles, not the fractions of the
+entire grid cell covered.
+
+<li>Valid cover data mask is defined as a portions of the grid where sum of the
+fractions of glaciers, lakes, and soils is larger than 0. For each model land
+point where there is no valid data the glacier, lake, and soil cover is copied
+from the nearest valid point.
+
+<li>Valid cover data mask is redefined as a portion of the grid where sum of the
+vegetation fractions is larger than 0. For each model land point where there is
+no valid data, and which is not completely covered by lakes or glaciers the
+vegetation cover fractions are copied from the nearest valid point.
+
+<li>For each model land point a set of tiles is created according to the
+fractions obtained on the previous steps (<code>land_cover_cold_start_0d</code>):
+   <ol>
+   <li>Fractions of glaciers are normalized so that their sum does not exceed 1
+   <li>Fractions of lakes are normalized so that the sum of lakes and
+   (normalized) glaciers does not exceed 1
+   <li>Fractions of soils are normalized so that the sum of the soils,
+   normalized glaciers, and normalized lakes does not exceed 1
+   <li>Glacier and lake tiles are created according to their normalized fractions
+   <li>Vegetated soil tiles are created so that the total fractions of
+   vegetation types are proportional to those in the input vegetation cover
+   data, and the total fractions of the soil types are proportional to those in
+   the input soil data. The process uses random overlap assumption &mdash; that
+   is, it assumes there is no preferred soil/vegetation combinations.
+   </ol>
+</ol>
+<hr>
+</html>

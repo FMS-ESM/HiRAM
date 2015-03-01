@@ -1,0 +1,283 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN"
+   "http://www.w3.org/TR/html4/strict.dtd">
+<html>
+<head>
+  <title>land_tile.F90 notes</title>
+  <link href="style.css" rel="stylesheet" type="text/css">
+</head>
+
+<body>
+  <h2>Land model tiles</h2>
+  <p>
+  Tile is defined as a portion of the land in a grid cell that has uniform
+  properties. Tiles represent the sub-grid surface heterogeneity. 
+  For example, a grid cell can include a lake tile, a glacier tile, and
+  several vegetated tiles, each covering a fraction of the land. The location 
+  of the
+  tiles within the grid cell is not specified, and in fact portions of a tile may be 
+  scattered as a patchwork around the gridcell. The interaction between land and the
+  atmosphere is calculated for each tile separately, with the fluxes to the
+  atmosphere calculated (outside of the land model) as the weighted sum of the
+  fluxes from each tile.
+  <p>
+  Consequently, tile is where the model state variables are kept, and most of
+  the physical calculations in the land model are done on tile-per-tile basis.
+  <p>
+  The distinctive feature of LM3 is that the number and sizes of the tiles
+  within a grid cell don't necessarily stay the same during a model run. For
+  example, the number of vegetated tiles can increase due to human land use
+  processes, or decrease when vegetation in two tiles grows to be essentially
+  the same.
+  <p>
+  The requirement of dynamic tiling &mdash; that is, the ability to change the
+  number and the size of the tiles during the model runs &mdash; has in large
+  degree determined the structure of this code.
+  <p>
+  <code>land_tile_mod</code> (<a href="../land_tile.F90">land_tile.F90</a>) 
+  contains the definition of land tile,
+  associated data structures and subroutines:
+  <ol>
+  <li>Definition of the general structure of the land model tiles and operations
+  on individual tiles
+  <li>Definition of the tile containers an operations available with those
+  containers
+  <li>Definition of the tile enumerators and their associated accessors.
+  </ol>
+
+
+  <h3><a name="tile_data">Tile data</a></h3>    
+  <p>
+  <code>land_tile_type</code> is a container for the information belonging to the
+  component of the land model (glacier, soil, lake, vegetation, canopy air, and
+  snow models), and some information common to all of the components. 
+
+<pre>
+type :: land_tile_type
+   integer :: tag = 0   ! defines type of the tile 
+
+   real    :: frac      ! fractional tile area, dimensionless
+   type(glac_tile_type), pointer :: glac => NULL() ! glacier model data
+   type(lake_tile_type), pointer :: lake => NULL() ! lake model data
+   type(soil_tile_type), pointer :: soil => NULL() ! soil model data
+   type(snow_tile_type), pointer :: snow => NULL() ! snow data
+   type(cana_tile_type), pointer :: cana => NULL() ! canopy air data
+   type(vegn_tile_type), pointer :: vegn => NULL() ! vegetation model data
+
+   type(diag_buff_type), pointer :: diag => NULL() ! diagnostic data storage
+   
+   ! data that are carried over from the previous time step
+   real :: Sg_dir(NBANDS), Sg_dif(NBANDS) ! fractions of downward direct and 
+       ! diffuse short-wave radiation absorbed by ground and snow
+   real :: grnd_emis ! emissivity of ground
+   real :: Sv_dir(NBANDS), Sv_dif(NBANDS) ! fractions of downward direct and 
+       ! diffuse radiation absorbed by the vegetation.
+   real :: land_refl_dir(NBANDS), land_refl_dif(NBANDS)
+   
+   real :: land_d, land_z0m, land_z0s
+   real :: surf_refl_lw ! long-wave reflectivity of the ground surface (possibly snow-covered)
+   real :: vegn_refl_lw ! black background long-wave reflectivity of the vegetation canopy
+   real :: vegn_tran_lw ! black background long-wave transmissivity of the vegetation canopy
+
+   real :: lwup    = 200.0  ! upward long-wave flux from the entire land (W/m2), the result of
+           ! the implicit time step -- used in update_bc_fast to return to the flux exchange.
+   real :: e_res_1 = 0.0 ! energy residual in canopy air EB equation
+   real :: e_res_2 = 0.0 ! energy residual in canopy EB equation
+end type land_tile_type
+</pre>
+  <p>
+  The components are represented by pointers, so that for each tile the land
+  model can decide what individual component models to call based on the status
+  of the specific pointer. For example, if the glacier information is
+  present (that is, pointer <code>glac</code> is associated), then the glacier
+  model is supposed to be called; if the vegetation tile is present then the
+  vegetation model should be called, and so on.
+  <div class="figure">
+  <img src="glac_tile_diagram.png">
+  <p>Figure 1. Structure of the land tile for a glacier site.
+  </div>
+  <div class="figure">
+  <img src="soil_tile_diagram.png">
+  <p>Figure 2. Structure of the land tile for a vegetated site.
+  </div>
+  <p>
+  Note that some of the components are mutually exclusive: for example either lake,
+  glacier or soil can be present in a given land tile, but not any two of them
+  together. Other components must be present in every land tile, like snow or
+  canopy air. Vegetation can be either present or absent &mdash; for example
+  over glaciers or lakes there can be no vegetation, while we assume that over
+  soil there is vegetation, even if it is degenerate.
+  <p>
+  More specifically, there are only three combinations of the components that the model
+  currently uses: <code>glac+snow+cana</code>, <code>lake+snow+cana</code>, and 
+  <code>soil+snow+vegn+cana</code>. Naturally, the latter is the most widespread
+  situation.
+  <p>
+  The upper-level land model code is kept mostly ignorant of the contents of the
+  components; currently there are rare instances where the fields of the
+  components are referenced directly in the <code>land_model.F90</code>, but they
+  should be eliminated in the process of future model development.
+  <p> 
+  There are currently several common fields present in each tile: 
+  <ul>
+     <li>
+     <code>frac</code> is fractional tile area, that is the fraction of the land
+     in the grid cell covered by this particular land tile. Obviously the sum
+     of <code>frac</code>s for all tiles in a grid cell must be equal to 1. 
+     <li>
+     The <code>tag</code> field is reserved to specify a "kind" of the tile, if
+     necessary. So far it is used only in unit tests, to distinguish between
+     different tiles for diagnostic purposes.
+     <li>
+     <code>diag</code> &mdash; a flexible-size intermediate buffer for diagnostic
+     output; diagnostic data sent from each tile are stored in this buffer and
+     then aggregated and transmitted to the FMS diagnostic manager at the same
+     time, presumably at the end of fast and slow updates.
+  </ul>
+  The rest of the fields at the end of <code>land_tile_type</code> definition above
+  are the values that must be preserved between the time steps for the sake of
+  efficiency.
+  <p>
+  Operations defined for tiles:
+  <ul>
+     <li><code>new_land_tile</code> &mdash; constructor, creates the tile and,
+     optionally, component tiles. Returns pointer to newly allocated tile.
+     <li><code>delete_land_tile</code> &mdash; destructor, destroys the component
+     tiles and deallocates the tile itself. It assumes that the tile was
+     actually allocated (which is the case if the tile was created using
+     <code>new_land_tile</code>)
+  </ul>
+
+  <h3><a name="tile_containers">Land tile containers</a></h3>
+  <p>
+  Individual land tiles are combined in containers representing the tiles in
+  the grid cells. Each grid cell of the compute domain has a container
+  associated with it in <code>tile_map</code> field of the <code>land_state_type</code>.
+  <p>
+  The size of each container is flexible, so that the tiles can be added and
+  removed from container dynamically during the model run. There is no
+  limit on the number of tiles that can be stored in the container.
+  <p>
+  The container type, <code>land_tile_list_type</code> is defined in
+  <code>land_tile_mod</code> as an opaque type, so that no individual components of
+  the type are accessible from outside of the <code>land_tile_mod</code>. Instead,
+  this module provides a (hopefully) complete set of operations on the containers.
+  <p>
+  A typical example of tile container usage looks like this:
+<pre>
+type(land_tile_list_type)     :: list
+type(land_tile_type), pointer :: tile
+
+call land_tile_list_init(list)
+
+tile=>new_land_tyle()
+call insert(tile,list)
+
+... add more tiles
+... do something with the container and the tiles
+... remove some tiles
+... do something else
+
+call land_tile_list_end(list)
+</pre>
+  <p>
+  Note that the final call to the destructor <code>land_tile_list_end</code> also
+  destroys all the tiles that remain in the container at this point.
+  <p>
+  Once the tiles are put into container, they can be accessed using enumerators.
+
+  <h3><a name="tile_enumerators">Land tile enumerators</a></h3>
+  <p>
+  Typical usage of the enumerators to access tiles:
+	
+<pre>
+type(land_tile_list_type)     :: list
+type(land_tile_enum_type)     :: ce   ! stands for "current element"
+type(land_tile_type), pointer :: tile
+
+ce=first_elmt(list)
+do while ( ce/=tail_elmt(list) )
+   tile=>current_tile(ce)
+   ....
+   do something with the current tile here
+   ....
+   ce=next_elmt(ce)
+enddo
+</pre>
+  <p>
+  Function <code>first_elmt</code> returns the enumerator positioned at the
+  beginning of the list; <code>tail_elmt</code> in fact returns position just
+  behind the end of the list. <code>current_tile</code> simply returns the
+  FORTRAN90 pointer to the tile currently addressed by the enumerator.
+  <p>
+  Here is an example of accessing the tiles in reverse order:
+<pre>
+ce=tail_elmt(list)
+do while ( ce/=first_elmt(list) )
+   ce=prev_elmt()
+   tile=>current_tile(ce)
+   ....
+   do something with current tile here
+   ....
+enddo
+</pre>
+	   
+  <p>
+  Note a different order of the enumerator promotion relative to the
+  <code>current_tile</code> function call: this is due to the fact that
+  <code>tail_elmt</code> actually returns enumerator that addresses the element
+  just behind the end of the list, so one needs to do a step back before
+  getting a tile pointer.
+  <p>
+  Since in the most common case in the land model a user needs to travers
+  all the tiles in the 2-dimensional compute domain, the tile enumerator also
+  transparently supports 2-dimensional arrays of sets:
+
+<pre>
+type(land_tile_list_type)     :: map(is:ie,js:je)
+type(land_tile_enum_type)     :: ce
+type(land_tile_type), pointer :: tile
+
+ce=first_elmt(map)
+do while ( ce/=tail_elmt(map) )
+   tile=>current_tile(ce)
+   ....
+   do something with the current tile here
+   ....
+   ce=next_elmt(ce)
+enddo
+</pre>
+
+  <p>
+  In this case, one can get indices of current point from the enumerator by
+  using:
+
+<pre>
+call get_elmt_indices(ce,i,j,k)
+</pre>
+  <code>i</code>,<code>j</code>, and <code>k</code> take current values of the indices
+  along the first (longitude), second (latitude), and third (tile)
+  dimensions respectively. There are two caveats, however. First is that the
+  returned <code>i</code> and <code>j</code> are relative to the beginning of the
+  array, that is, by default the array is treated as if its lower bound indices
+  were 1.  The problem is that FORTRAN90 seem to treat all the arrays passed
+  through argument list without <code>pointer</code> attribute as starting from 1,
+  rather than preserving <code>ubound</code> of actual argument. On the other hand,
+  requiring an array of sets that we traverse to have <code>pointer</code>
+  attribute would be too restrictive in many cases.
+  <p>
+  To resolve this issue there are two optional arguments to the functions
+  <code>first_elmt</code> and <code>last_elmt</code>: <code>is</code> that specifies the
+  beginning of the first index of the array, and <code>js</code> that does the same
+  for the second index. If those arguments are provided, then the values
+  returned by <code>get_elmt_indices</code> are calculated relative to the
+  specified lower boundaries. These optional arguments do not affect the
+  comparison of enumerators, that is the enumerators are equal if they point to
+  the same tile, regardless of the starting indices.
+  <p>
+  Second caveat is that if the current set is being manipulated during the
+  traversal (for example by inserting new tiles or deleting existing tiles) the
+  <code>k</code> index is most likely going to be incorrect. 
+
+<hr>
+</body>
+</html>
